@@ -56,6 +56,34 @@ class BetfairClient:
 
     # ------------------------------------------------------------------ auth
 
+    # Where we materialize the cert/key from env vars (tempfs, not persisted).
+    _CERT_DIR = "/tmp/betfair_certs"
+    _CERT_FILE = "/tmp/betfair_certs/client-2048.crt"
+    _KEY_FILE = "/tmp/betfair_certs/client-2048.key"
+
+    def _materialize_certs_from_env(self) -> str | None:
+        """If BETFAIR_CERT_PEM + BETFAIR_KEY_PEM env vars are set, write them
+        to /tmp/betfair_certs/ and return that directory path. Returns None
+        if env vars are empty (fall back to BETFAIR_CERT_PATH behaviour).
+        """
+        import os as _os
+        cert_pem = _os.environ.get("BETFAIR_CERT_PEM", "").strip()
+        key_pem = _os.environ.get("BETFAIR_KEY_PEM", "").strip()
+        if not cert_pem or not key_pem:
+            return None
+        # Render env vars sometimes deliver newlines as literal '\n'. Normalise.
+        cert_pem = cert_pem.replace("\\n", "\n")
+        key_pem = key_pem.replace("\\n", "\n")
+        _os.makedirs(self._CERT_DIR, exist_ok=True)
+        with open(self._CERT_FILE, "w") as fh:
+            fh.write(cert_pem if cert_pem.endswith("\n") else cert_pem + "\n")
+        _os.chmod(self._CERT_FILE, 0o600)
+        with open(self._KEY_FILE, "w") as fh:
+            fh.write(key_pem if key_pem.endswith("\n") else key_pem + "\n")
+        _os.chmod(self._KEY_FILE, 0o600)
+        log.info("Betfair certs materialized in %s", self._CERT_DIR)
+        return self._CERT_DIR
+
     def _build(self) -> betfairlightweight.APIClient:
         if not config.BETFAIR_USERNAME or not config.BETFAIR_PASSWORD:
             raise BetfairError("BETFAIR_USERNAME / BETFAIR_PASSWORD not set")
@@ -69,9 +97,17 @@ class BetfairClient:
             locale=(config.BETFAIR_LOCALE or "").lower() or None,
         )
         if config.BETFAIR_USE_CERTS:
-            if not config.BETFAIR_CERT_PATH or not config.BETFAIR_KEY_PATH:
-                raise BetfairError("BETFAIR_USE_CERTS=true but cert paths empty")
-            kwargs["certs"] = config.BETFAIR_CERT_PATH
+            # Prefer env-var PEM content (Render-friendly); fall back to paths.
+            cert_dir = self._materialize_certs_from_env()
+            if cert_dir is None:
+                if not config.BETFAIR_CERT_PATH or not config.BETFAIR_KEY_PATH:
+                    raise BetfairError(
+                        "BETFAIR_USE_CERTS=true but neither BETFAIR_CERT_PEM/"
+                        "BETFAIR_KEY_PEM env vars nor BETFAIR_CERT_PATH/"
+                        "BETFAIR_KEY_PATH file paths are set"
+                    )
+                cert_dir = config.BETFAIR_CERT_PATH
+            kwargs["certs"] = cert_dir
         return betfairlightweight.APIClient(**kwargs)
 
     def _ensure(self) -> betfairlightweight.APIClient:
