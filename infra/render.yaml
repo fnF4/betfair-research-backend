@@ -1,0 +1,100 @@
+# Render.com Blueprint — deploy backend con 1 click da repo GitHub.
+# Import: Render Dashboard -> New -> Blueprint -> punta al tuo repo -> Apply.
+#
+# PROFILO DEFAULT: Starter ($7/mese)
+#   - web service always-on (no sleep)
+#   - disco persistente 1 GB per SQLite
+#   - autonomous scheduler in-process (no external cron)
+#
+# Per upgrade a Standard ($25/mese, 2GB RAM):
+#   1. cambia `plan: starter` -> `plan: standard`
+#   2. alza TIER_1_LIMIT (es. 80-120) per coprire più mercati senza OOM
+
+services:
+  - type: web
+    name: betfair-research-backend
+    env: python
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: sqlite-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: BETFAIR_DATA_DIR
+        value: /var/data
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+      # --- Betfair credentials (sync:false -> set from Dashboard) ---
+      - key: BETFAIR_USERNAME
+        sync: false
+      - key: BETFAIR_PASSWORD
+        sync: false
+      - key: BETFAIR_APP_KEY
+        sync: false
+      - key: BETFAIR_USE_CERTS
+        value: "false"
+      - key: BETFAIR_LOCALE
+        value: "IT"
+      - key: BETFAIR_COMMISSION
+        value: "0.05"
+
+      # --- CORS (imposta dopo deploy Vercel del frontend) ---
+      - key: BETFAIR_CORS_ORIGINS
+        sync: false
+
+      # --- Admin (random generated) ---
+      - key: BETFAIR_ADMIN_SECRET
+        generateValue: true
+
+      # --- Execution mode (paper only — codice live non presente) ---
+      - key: BETFAIR_EXECUTION_MODE
+        value: paper
+      - key: BETFAIR_KILL_SWITCH
+        value: "false"
+
+      # --- Sport coverage ---
+      # 1=Soccer, 2=Tennis, 7=Horse Racing, 4=Cricket
+      - key: BETFAIR_EVENT_TYPE_IDS
+        value: "1,2"
+      - key: BETFAIR_HORIZON_HOURS
+        value: "72"
+
+      # --- Tiered scan limits (conservative defaults for Starter) ---
+      - key: BETFAIR_TIER_1_LIMIT
+        value: "30"
+      - key: BETFAIR_TIER_2_LIMIT
+        value: "0"
+      - key: BETFAIR_TIER_3_LIMIT
+        value: "0"
+      - key: BETFAIR_MIN_TOTAL_MATCHED
+        value: "1000"
+
+      # --- Detection thresholds ---
+      - key: BETFAIR_MIN_EDGE_NET
+        value: "0.003"
+      - key: BETFAIR_SAFETY_MARGIN
+        value: "1.5"
+      - key: BETFAIR_GHOST_MS
+        value: "2000"
+      - key: BETFAIR_CYCLE_SECONDS
+        value: "45"
+
+      # --- Paper trading ---
+      - key: BETFAIR_CAPITAL
+        value: "10000"
+      - key: BETFAIR_PER_TRADE
+        value: "500"
+      - key: BETFAIR_PAPER_MIN_EDGE
+        value: "0.003"
+      - key: BETFAIR_PAPER_MIN_NOTIONAL
+        value: "25"
+      - key: BETFAIR_MAX_HOLD_H
+        value: "72"
+      - key: BETFAIR_ONLY_CATCHABLE
+        value: "false"
