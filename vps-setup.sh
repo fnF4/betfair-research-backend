@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Aruba VPS one-shot setup for betfair-research-backend.
-# Generates a fresh client cert, prompts the user for Betfair credentials,
+# Downloads files via raw.githubusercontent.com (IPv6-capable, unlike github.com).
+# Generates a fresh client cert, prompts for Betfair credentials,
 # builds the Docker image and starts the container.
 #
 # Run on the VPS as root:
 #   curl -sL https://raw.githubusercontent.com/fnF4/betfair-research-backend/main/vps-setup.sh | bash
-# or, after `git clone`:
-#   bash vps-setup.sh
 
 set -euo pipefail
 
+REPO_RAW=https://raw.githubusercontent.com/fnF4/betfair-research-backend/main
 REPO_DIR=/root/betfair-research-backend
 CERT_DIR=/root/betfair-certs
 ENV_FILE=$REPO_DIR/backend/.env
@@ -18,19 +18,36 @@ IMAGE_TAG=betfair-research-backend:latest
 
 echo
 echo "=================================================================="
-echo " betfair-research-backend — VPS setup script"
+echo " betfair-research-backend — VPS setup script (raw download mode)"
 echo "=================================================================="
 echo
 
-# ---------- 1. Repo --------------------------------------------------------
-if [ ! -d "$REPO_DIR" ]; then
-  echo "[1/6] Cloning repo..."
-  cd /root
-  git clone https://github.com/fnF4/betfair-research-backend.git
-fi
+# ---------- 1. Download files via raw (IPv6 works) -----------------------
+echo "[1/6] Downloading files from raw.githubusercontent.com..."
+mkdir -p "$REPO_DIR/backend"
 cd "$REPO_DIR"
-git pull --ff-only origin main || true
-echo "[1/6] OK repo at $REPO_DIR"
+
+curl -sSf "$REPO_RAW/Dockerfile" -o Dockerfile
+
+for f in \
+    requirements.txt \
+    api.py \
+    config.py \
+    storage.py \
+    killswitch.py \
+    health.py \
+    betfair_client.py \
+    arbitrage.py \
+    collector.py \
+    paper_trading.py \
+    logger_setup.py
+do
+    echo "    fetching backend/$f"
+    curl -sSf "$REPO_RAW/backend/$f" -o "backend/$f"
+done
+
+echo "[1/6] OK files downloaded to $REPO_DIR"
+ls -la "$REPO_DIR" "$REPO_DIR/backend"
 
 # ---------- 2. Generate cert ----------------------------------------------
 mkdir -p "$CERT_DIR"
@@ -65,11 +82,11 @@ read -r -p "Press ENTER once you have uploaded the cert on Betfair..."
 
 # ---------- 4. Collect Betfair credentials --------------------------------
 echo
-echo "[4/6] Enter your Betfair credentials (input is hidden where appropriate)"
+echo "[4/6] Enter your Betfair credentials"
 read -r -p "  BETFAIR_USERNAME (email): " BETFAIR_USERNAME
 read -r -s -p "  BETFAIR_PASSWORD: " BETFAIR_PASSWORD; echo
 read -r -p "  BETFAIR_APP_KEY (Delayed, 16 chars): " BETFAIR_APP_KEY
-read -r -s -p "  ADMIN_SECRET (any random string for you): " ADMIN_SECRET; echo
+read -r -s -p "  ADMIN_SECRET (any random string): " ADMIN_SECRET; echo
 
 # ---------- 5. Write .env -------------------------------------------------
 mkdir -p "$REPO_DIR/backend"
@@ -138,10 +155,9 @@ echo
 echo "Logs (last 20 lines):"
 docker logs --tail 20 "$CONTAINER_NAME" 2>&1 || true
 echo
-echo "Once running, hit:"
-echo "  http://<this-vps-ip>/api/health"
-echo "  http://<this-vps-ip>/api/status"
-echo "  http://<this-vps-ip>/api/portfolio"
+echo "Once running, hit (from any IPv6-capable browser):"
+echo "  http://[2a00:6d40:72:101::b4]/api/health"
+echo "  http://[2a00:6d40:72:101::b4]/api/portfolio"
 echo
 echo "Tail logs live:    docker logs -f $CONTAINER_NAME"
 echo "Restart container: docker restart $CONTAINER_NAME"
