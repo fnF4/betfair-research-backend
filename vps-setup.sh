@@ -78,15 +78,15 @@ echo "------ BEGIN client-2048.crt -------------------------------------"
 cat "$CERT_DIR/client-2048.crt"
 echo "------ END client-2048.crt ---------------------------------------"
 echo
-read -r -p "Press ENTER once you have uploaded the cert on Betfair..."
+read -r -p "Press ENTER once you have uploaded the cert on Betfair..." < /dev/tty
 
 # ---------- 4. Collect Betfair credentials --------------------------------
 echo
 echo "[4/6] Enter your Betfair credentials"
-read -r -p "  BETFAIR_USERNAME (email): " BETFAIR_USERNAME
-read -r -s -p "  BETFAIR_PASSWORD: " BETFAIR_PASSWORD; echo
-read -r -p "  BETFAIR_APP_KEY (Delayed, 16 chars): " BETFAIR_APP_KEY
-read -r -s -p "  ADMIN_SECRET (any random string): " ADMIN_SECRET; echo
+read -r -p "  BETFAIR_USERNAME (email): " BETFAIR_USERNAME < /dev/tty
+read -r -s -p "  BETFAIR_PASSWORD: " BETFAIR_PASSWORD < /dev/tty; echo
+read -r -p "  BETFAIR_APP_KEY (Delayed, 16 chars): " BETFAIR_APP_KEY < /dev/tty
+read -r -s -p "  ADMIN_SECRET (any random string): " ADMIN_SECRET < /dev/tty; echo
 
 # ---------- 5. Write .env -------------------------------------------------
 mkdir -p "$REPO_DIR/backend"
