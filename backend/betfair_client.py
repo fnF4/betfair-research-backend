@@ -96,8 +96,8 @@ class BetfairClient:
             app_key=config.BETFAIR_APP_KEY,
             locale=(config.BETFAIR_LOCALE or "").lower() or None,
         )
+        cert_tuple: tuple[str, str] | None = None
         if config.BETFAIR_USE_CERTS:
-            # Prefer env-var PEM content (Render-friendly); fall back to paths.
             cert_dir = self._materialize_certs_from_env()
             if cert_dir is None:
                 if not config.BETFAIR_CERT_PATH or not config.BETFAIR_KEY_PATH:
@@ -106,9 +106,23 @@ class BetfairClient:
                         "BETFAIR_KEY_PEM env vars nor BETFAIR_CERT_PATH/"
                         "BETFAIR_KEY_PATH file paths are set"
                     )
-                cert_dir = config.BETFAIR_CERT_PATH
-            kwargs["certs"] = cert_dir
-        return betfairlightweight.APIClient(**kwargs)
+                cert_tuple = (config.BETFAIR_CERT_PATH, config.BETFAIR_KEY_PATH)
+                kwargs["certs"] = cert_dir or config.BETFAIR_CERT_PATH
+            else:
+                cert_tuple = (self._CERT_FILE, self._KEY_FILE)
+                kwargs["certs"] = cert_dir
+
+        client = betfairlightweight.APIClient(**kwargs)
+
+        # CRITICAL: betfairlightweight in some versions does not reliably
+        # auto-detect client-2048.crt / client-2048.key inside the certs
+        # directory, leaving client.cert as None and resulting in a TLS
+        # handshake without a client certificate (Betfair returns
+        # CERT_AUTH_REQUIRED). Force the (cert_path, key_path) tuple here.
+        if cert_tuple is not None:
+            client.cert = cert_tuple
+            log.info("Forced client.cert = %s", cert_tuple)
+        return client
 
     def _ensure(self) -> betfairlightweight.APIClient:
         if self._trading is None:
