@@ -125,10 +125,13 @@ chmod 600 "$ENV_FILE"
 echo "[5/6] OK env file written ($ENV_FILE)"
 
 # ---------- 6. Build + run docker -----------------------------------------
+# IMPORTANT: this VPS has only IPv6 outbound. Docker bridge defaults to IPv4
+# NAT, which cannot reach PyPI/pip. We use --network host so the container
+# inherits the host's IPv6 networking directly.
 echo
-echo "[6/6] Building Docker image (first build ~3-5 minutes)..."
+echo "[6/6] Building Docker image with --network host (first build ~3-5 minutes)..."
 cd "$REPO_DIR"
-docker build -t "$IMAGE_TAG" .
+docker build --network host -t "$IMAGE_TAG" .
 
 echo
 echo "[6/6] Stopping any previous container..."
@@ -140,7 +143,7 @@ docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
-  -p 80:8080 \
+  --network host \
   -v /data:/data \
   "$IMAGE_TAG"
 
